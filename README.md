@@ -42,7 +42,7 @@ Orders cover **January 2024 to December 2025**.
 ## Tools
 
 - **MySQL / MySQL Workbench**: database design, data loading and analysis
-- **SQL**: joins, aggregations, subqueries, views, `ROLLUP`, date functions
+- **SQL**: joins, aggregations, subqueries, views, date functions
 - **Power BI**: data modeling, DAX measures and dashboard design
 
 ---
