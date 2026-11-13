@@ -1,0 +1,134 @@
+-- Revenue and orders per employee
+SELECT
+    CONCAT(e.first_name, ' ', e.last_name) AS employee,
+    s.store_name,
+    COUNT(DISTINCT o.order_id) AS orders,
+    ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount)), 2) AS revenue
+FROM employees AS e
+JOIN stores AS s ON s.store_id = e.store_id
+JOIN orders AS o ON o.employee_id = e.employee_id
+JOIN order_items AS oi ON oi.order_id = o.order_id
+WHERE o.order_status = 'Completed'
+GROUP BY e.employee_id, employee, s.store_name
+ORDER BY revenue DESC;
+
+
+-- Top 10 employees by profit
+SELECT
+    CONCAT(e.first_name, ' ', e.last_name) AS employee,
+    ROUND(SUM((oi.unit_price * (1 - oi.discount) - p.unit_cost) * oi.quantity), 2) AS profit
+FROM employees AS e
+JOIN orders AS o ON o.employee_id = e.employee_id
+JOIN order_items AS oi ON oi.order_id = o.order_id
+JOIN products AS p ON p.product_id = oi.product_id
+WHERE o.order_status = 'Completed'
+GROUP BY e.employee_id, employee
+ORDER BY profit DESC
+LIMIT 10;
+
+
+-- Number of employees and revenue per employee by store
+SELECT
+    s.store_name,
+    COUNT(DISTINCT e.employee_id) AS employees,
+    ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount))
+        / COUNT(DISTINCT e.employee_id), 2) AS revenue_per_employee
+FROM stores AS s
+JOIN employees AS e ON e.store_id = s.store_id
+JOIN orders AS o ON o.employee_id = e.employee_id
+JOIN order_items AS oi ON oi.order_id = o.order_id
+WHERE o.order_status = 'Completed'
+GROUP BY s.store_id, s.store_name
+ORDER BY revenue_per_employee DESC;
+
+
+-- Top employee in each store
+SELECT
+    s.store_name,
+    CONCAT(e.first_name, ' ', e.last_name) AS employee,
+    ROUND(t.revenue, 2) AS revenue
+FROM (
+    SELECT o.employee_id,
+           SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS revenue
+    FROM orders AS o
+    JOIN order_items AS oi ON oi.order_id = o.order_id
+    WHERE o.order_status = 'Completed'
+    GROUP BY o.employee_id
+) AS t
+JOIN employees AS e ON e.employee_id = t.employee_id
+JOIN stores AS s ON s.store_id = e.store_id
+WHERE t.revenue = (
+    SELECT MAX(t2.revenue)
+    FROM (
+        SELECT o.employee_id,
+               SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS revenue
+        FROM orders AS o
+        JOIN order_items AS oi ON oi.order_id = o.order_id
+        WHERE o.order_status = 'Completed'
+        GROUP BY o.employee_id
+    ) AS t2
+    JOIN employees AS e2 ON e2.employee_id = t2.employee_id
+    WHERE e2.store_id = e.store_id
+)
+ORDER BY t.revenue DESC;
+
+
+-- Each employee's revenue compared with their store's average
+SELECT
+    CONCAT(e.first_name, ' ', e.last_name) AS employee,
+    s.store_name,
+    ROUND(t.revenue, 2) AS revenue,
+    ROUND(sa.avg_revenue, 2) AS store_avg_revenue,
+    ROUND(t.revenue - sa.avg_revenue, 2) AS difference
+FROM (
+    SELECT o.employee_id,
+           SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS revenue
+    FROM orders AS o
+    JOIN order_items AS oi ON oi.order_id = o.order_id
+    WHERE o.order_status = 'Completed'
+    GROUP BY o.employee_id
+) AS t
+JOIN employees AS e ON e.employee_id = t.employee_id
+JOIN stores AS s ON s.store_id = e.store_id
+JOIN (
+    SELECT e.store_id, AVG(x.revenue) AS avg_revenue
+    FROM (
+        SELECT o.employee_id,
+               SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS revenue
+        FROM orders AS o
+        JOIN order_items AS oi ON oi.order_id = o.order_id
+        WHERE o.order_status = 'Completed'
+        GROUP BY o.employee_id
+    ) AS x
+    JOIN employees AS e ON e.employee_id = x.employee_id
+    GROUP BY e.store_id
+) AS sa ON sa.store_id = e.store_id
+ORDER BY s.store_name, difference DESC;
+
+
+-- Revenue by year of hire
+SELECT
+    YEAR(e.hire_date) AS hire_year,
+    COUNT(DISTINCT e.employee_id) AS employees,
+    ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount))
+        / COUNT(DISTINCT e.employee_id), 2) AS revenue_per_employee
+FROM employees AS e
+JOIN orders AS o ON o.employee_id = e.employee_id
+JOIN order_items AS oi ON oi.order_id = o.order_id
+WHERE o.order_status = 'Completed'
+GROUP BY hire_year
+ORDER BY hire_year;
+
+
+-- Cancellation and return rate per employee
+SELECT
+    CONCAT(e.first_name, ' ', e.last_name) AS employee,
+    COUNT(*) AS total_orders,
+    SUM(CASE WHEN o.order_status = 'Cancelled' THEN 1 ELSE 0 END) AS cancelled,
+    SUM(CASE WHEN o.order_status = 'Returned' THEN 1 ELSE 0 END) AS returned,
+    ROUND(SUM(CASE WHEN o.order_status IN ('Cancelled', 'Returned') THEN 1 ELSE 0 END)
+        * 100.0 / COUNT(*), 1) AS lost_order_rate_pct
+FROM employees AS e
+JOIN orders AS o ON o.employee_id = e.employee_id
+GROUP BY e.employee_id, employee
+ORDER BY lost_order_rate_pct DESC;
